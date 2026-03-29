@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -12,25 +12,8 @@ export default function Dashboard() {
       content: "Zdravo! Ja sam Kralj 👑, tvoj AI asistent sa 45 skillova. Kako mogu pomoći danas?",
     },
   ]);
-  const [kiloStatus, setKiloStatus] = useState("ready");
-  const [githubRepo, setGithubRepo] = useState("not-linked");
-  const [ollamaStatus, setOllamaStatus] = useState("not-installed");
-  const [activeTasks, setActiveTasks] = useState([
-    { id: 1, skill: "v0-dev", status: "completed", progress: 100 },
-    { id: 2, skill: "app-builder", status: "running", progress: 45 },
-  ]);
-
-  // Simulate real-time status updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveTasks(prev => prev.map(task => 
-        task.status === "running" 
-          ? { ...task, progress: Math.min(task.progress + 5, 100) }
-          : task
-      ));
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [isExecuting, setIsExecuting] = useState(false);
 
   const topSkills = [
     { id: "v0-dev", name: "v0-dev", icon: "🎨", desc: "UI iz prompta", color: "bg-purple-500" },
@@ -59,179 +42,151 @@ export default function Dashboard() {
     if (!chatInput.trim()) return;
     setChatMessages([...chatMessages, { role: "user", content: chatInput }]);
     setChatInput("");
-    setTimeout(() => {
-      setChatMessages((prev) => [
+    
+    // Pošalji na OpenClaw API
+    fetch('/api/openclaw', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: chatInput }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setChatMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: `Razumio sam: "${chatInput}". Koristit ću odgovarajući skill! 👑` },
+          ]);
+        } else {
+          setChatMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: `Greška: ${data.error || 'Nešto nije u redu'}` },
+          ]);
+        }
+      })
+      .catch(() => {
+        setChatMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: `Razumio sam: "${chatInput}". (Offline mode) 👑` },
+        ]);
+      });
+  };
+
+  const executeSkill = async (skillId: string, skillName: string) => {
+    if (isExecuting) return;
+    setIsExecuting(true);
+
+    try {
+      const response = await fetch('/api/skills/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          skill: skillId,
+          description: `Executing ${skillName}`,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Dodaj novi task u listu
+        setTasks(prev => [data.task, ...prev]);
+        
+        // Obavijesti korisnika
+        setChatMessages(prev => [
+          ...prev,
+          {
+            role: "assistant",
+            content: `🚀 Pokrenuo sam ${skillName}! Task ID: ${data.taskId}. Prati napredak u Tasks tabu.`,
+          },
+        ]);
+
+        // Prebaci na Tasks tab nakon 2 sekunde
+        setTimeout(() => setActiveTab("tasks"), 2000);
+      } else {
+        throw new Error(data.error || 'Failed to execute skill');
+      }
+    } catch (error) {
+      console.error('Skill execution error:', error);
+      setChatMessages(prev => [
         ...prev,
-        { role: "assistant", content: `Razumio sam: "${chatInput}". Koristit ću odgovarajući skill! 👑` },
+        {
+          role: "assistant",
+          content: `❌ Greška pri pokretanju ${skillName}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        },
       ]);
-    }, 500);
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed": return "text-green-500";
-      case "running": return "text-blue-500";
-      case "failed": return "text-red-500";
-      default: return "text-gray-500";
+    } finally {
+      setIsExecuting(false);
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "completed": return "✅";
-      case "running": return "⏳";
-      case "failed": return "❌";
-      default: return "⏰";
+  const loadTasks = async () => {
+    try {
+      const response = await fetch('/api/skills/execute');
+      const data = await response.json();
+      if (data.success) {
+        setTasks(data.tasks);
+      }
+    } catch (error) {
+      console.error('Failed to load tasks:', error);
     }
   };
 
-  const containerStyle = {
-    minHeight: "100vh",
-    backgroundColor: isDarkMode ? "#0a0a0a" : "#ffffff",
-    color: isDarkMode ? "#fafafa" : "#0a0a0a",
-    fontFamily: "system-ui, sans-serif",
-  };
-
-  const headerStyle = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "1rem 2rem",
-    borderBottom: `1px solid ${isDarkMode ? "#262626" : "#e5e5e5"}`,
-    position: "sticky" as const,
-    top: 0,
-    backgroundColor: isDarkMode ? "#0a0a0a" : "#ffffff",
-    zIndex: 50,
-  };
-
-  const tabsStyle = {
-    display: "flex",
-    gap: "0.5rem",
-    padding: "1rem 2rem",
-    borderBottom: `1px solid ${isDarkMode ? "#262626" : "#e5e5e5"}`,
-    overflowX: "auto",
-  };
-
-  const tabStyle = (isActive: boolean) => ({
-    padding: "0.5rem 1rem",
-    borderRadius: "0.375rem",
-    backgroundColor: isActive ? (isDarkMode ? "#262626" : "#f5f5f5") : "transparent",
-    cursor: "pointer",
-    border: "none",
-    color: "inherit",
-    fontWeight: isActive ? 600 : 400,
-    whiteSpace: "nowrap",
+  // Load tasks when switching to tasks tab
+  useState(() => {
+    if (activeTab === 'tasks') {
+      loadTasks();
+    }
   });
 
-  const cardStyle = {
-    padding: "1.5rem",
-    borderRadius: "0.5rem",
-    border: `1px solid ${isDarkMode ? "#262626" : "#e5e5e5"}`,
-    backgroundColor: isDarkMode ? "#171717" : "#f9f9f9",
-    cursor: "pointer",
-    transition: "transform 0.2s, box-shadow 0.2s",
-  };
-
-  const gridStyle = {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-    gap: "1rem",
-    padding: "2rem",
-  };
-
-  const chatContainerStyle = {
-    padding: "2rem",
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: "1rem",
-    height: "600px",
-  };
-
-  const chatMessageStyle = (role: string) => ({
-    maxWidth: "80%",
-    padding: "0.75rem 1rem",
-    borderRadius: "0.5rem",
-    backgroundColor: role === "user" 
-      ? (isDarkMode ? "#3b82f6" : "#2563eb")
-      : (isDarkMode ? "#262626" : "#f5f5f5"),
-    border: role === "assistant" ? `1px solid ${isDarkMode ? "#262626" : "#e5e5e5"}` : "none",
-  });
-
-  const sidebarStyle = {
-    width: "280px",
-    padding: "1rem",
-    borderRight: `1px solid ${isDarkMode ? "#262626" : "#e5e5e5"}`,
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: "1rem",
-    backgroundColor: isDarkMode ? "#111111" : "#fafafa",
-  };
-
-  const buttonStyle = {
-    padding: "0.5rem 1rem",
-    borderRadius: "0.375rem",
-    border: "none",
-    backgroundColor: "#3b82f6",
-    color: "white",
-    cursor: "pointer",
-    fontWeight: 500,
-    transition: "background-color 0.2s",
-  };
+  const bgClass = isDarkMode ? "bg-gray-950" : "bg-white";
+  const textClass = isDarkMode ? "text-gray-100" : "text-gray-900";
+  const borderClass = isDarkMode ? "border-gray-800" : "border-gray-200";
+  const cardBgClass = isDarkMode ? "bg-gray-900" : "bg-gray-50";
 
   return (
-    <div style={containerStyle}>
+    <div className={`min-h-screen ${bgClass} ${textClass}`}>
       {/* Header */}
-      <header style={headerStyle}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: 700 }}>👑 Kralj Dashboard</h1>
-          <span style={{ fontSize: "0.875rem", opacity: 0.7 }}>v1.0.0</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.875rem" }}>
-            <span>Kilo:</span>
-            <span style={{ 
-              padding: "0.25rem 0.75rem", 
-              borderRadius: "0.5rem", 
-              backgroundColor: kiloStatus === "ready" ? "#22c55e" : "#ef4444",
-              color: "white",
-              fontSize: "0.75rem",
-              fontWeight: 600
-            }}>
-              {kiloStatus === "ready" ? "✅ Ready" : "❌ Offline"}
-            </span>
+      <header className={`sticky top-0 z-50 border-b ${borderClass} ${bgClass} backdrop-blur`}>
+        <div className="flex h-14 items-center justify-between px-6">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold">👑 Kralj Dashboard</h1>
+            <span className="text-xs opacity-70">v1.0.0</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.875rem" }}>
-            <span>GitHub:</span>
-            <span style={{ 
-              padding: "0.25rem 0.75rem", 
-              borderRadius: "0.5rem", 
-              backgroundColor: githubRepo === "linked" ? "#22c55e" : "#eab308",
-              color: "white",
-              fontSize: "0.75rem",
-              fontWeight: 600
-            }}>
-              {githubRepo === "linked" ? "✅ Linked" : "⚠️ Not Linked"}
-            </span>
-          </div>
-          <button 
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            style={{ ...buttonStyle, backgroundColor: isDarkMode ? "#f59e0b" : "#1f2937" }}
-          >
-            {isDarkMode ? "☀️" : "🌙"}
-          </button>
-          <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "#3b82f6", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600 }}>
-            K👑
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm">
+              <span>Kilo:</span>
+              <span className="px-2 py-0.5 rounded-full bg-green-500 text-white text-xs font-semibold">✅ Ready</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <span>GitHub:</span>
+              <span className="px-2 py-0.5 rounded-full bg-yellow-500 text-white text-xs font-semibold">⚠️ Not Linked</span>
+            </div>
+            <button
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="px-3 py-1.5 rounded-md bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+            >
+              {isDarkMode ? "☀️" : "🌙"}
+            </button>
+            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center font-bold text-white">
+              K👑
+            </div>
           </div>
         </div>
       </header>
 
       {/* Tabs */}
-      <div style={tabsStyle}>
+      <div className={`flex gap-2 px-6 py-3 border-b ${borderClass} overflow-x-auto`}>
         {["dashboard", "chat", "tasks", "files", "settings", "skills"].map((tab) => (
-          <button 
+          <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            style={tabStyle(activeTab === tab)}
+            className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
+              activeTab === tab
+                ? isDarkMode
+                  ? "bg-gray-800"
+                  : "bg-gray-200"
+                : "hover:bg-gray-800/50"
+            }`}
           >
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
@@ -239,32 +194,20 @@ export default function Dashboard() {
       </div>
 
       {/* Main Content */}
-      <div style={{ padding: "2rem" }}>
+      <div className="p-6">
         {activeTab === "dashboard" && (
-          <div style={{ display: "flex", gap: "2rem" }}>
+          <div className="flex gap-8">
             {/* Sidebar */}
-            <aside style={sidebarStyle}>
+            <aside className={`w-72 p-4 border-r ${borderClass} ${cardBgClass}`}>
               <div>
-                <h3 style={{ fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", opacity: 0.7, marginBottom: "0.5rem" }}>
-                  Quick Launch
-                </h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                <h3 className="text-xs font-semibold uppercase opacity-70 mb-3">Quick Launch</h3>
+                <div className="space-y-2">
                   {topSkills.slice(0, 5).map((skill) => (
-                    <button 
+                    <button
                       key={skill.id}
-                      style={{ 
-                        padding: "0.5rem", 
-                        borderRadius: "0.375rem", 
-                        border: "none", 
-                        backgroundColor: isDarkMode ? "#262626" : "#e5e5e5",
-                        color: "inherit",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        fontSize: "0.875rem",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem"
-                      }}
+                      className={`w-full p-2 rounded-md text-left text-sm flex items-center gap-2 transition-colors ${
+                        isDarkMode ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-200 hover:bg-gray-300"
+                      }`}
                     >
                       <span>{skill.icon}</span>
                       <span>{skill.name}</span>
@@ -272,30 +215,17 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
-              
-              <div style={{ borderTop: `1px solid ${isDarkMode ? "#262626" : "#e5e5e5"}`, paddingTop: "1rem" }}>
-                <h3 style={{ fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", opacity: 0.7, marginBottom: "0.5rem" }}>
-                  All Skills ({skillCategories.reduce((acc, cat) => acc + cat.skills.length, 0)})
-                </h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", overflowY: "auto", maxHeight: "300px" }}>
+
+              <div className={`mt-6 pt-4 border-t ${borderClass}`}>
+                <h3 className="text-xs font-semibold uppercase opacity-70 mb-3">All Skills (45)</h3>
+                <div className="space-y-4 max-h-80 overflow-y-auto">
                   {skillCategories.map((category) => (
                     <div key={category.name}>
-                      <div style={{ fontSize: "0.75rem", fontWeight: 600, opacity: 0.8, padding: "0.25rem 0" }}>
-                        {category.name}
-                      </div>
+                      <div className="text-xs font-semibold opacity-80 mb-1">{category.name}</div>
                       {category.skills.slice(0, 3).map((skill) => (
-                        <button 
+                        <button
                           key={skill}
-                          style={{ 
-                            padding: "0.25rem 0.5rem", 
-                            borderRadius: "0.25rem", 
-                            border: "none", 
-                            backgroundColor: "transparent",
-                            color: isDarkMode ? "#a3a3a3" : "#6b7280",
-                            cursor: "pointer",
-                            fontSize: "0.75rem",
-                            textAlign: "left"
-                          }}
+                          className="block w-full text-left text-xs py-0.5 opacity-70 hover:opacity-100"
                         >
                           • {skill}
                         </button>
@@ -307,71 +237,49 @@ export default function Dashboard() {
             </aside>
 
             {/* Main Content */}
-            <main style={{ flex: 1 }}>
+            <main className="flex-1">
               {/* Stats Grid */}
-              <div style={gridStyle}>
-                <div style={cardStyle}>
-                  <div style={{ fontSize: "0.875rem", opacity: 0.7, marginBottom: "0.5rem" }}>Active Tasks</div>
-                  <div style={{ fontSize: "2rem", fontWeight: 700 }}>{activeTasks.filter(t => t.status === "running").length}</div>
-                  <div style={{ fontSize: "0.75rem", opacity: 0.5 }}>In Progress</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div className={`p-4 rounded-lg border ${borderClass} ${cardBgClass}`}>
+                  <div className="text-sm opacity-70 mb-2">Active Tasks</div>
+                  <div className="text-2xl font-bold">0</div>
+                  <div className="text-xs opacity-50">In Progress</div>
                 </div>
-                <div style={cardStyle}>
-                  <div style={{ fontSize: "0.875rem", opacity: 0.7, marginBottom: "0.5rem" }}>Completed</div>
-                  <div style={{ fontSize: "2rem", fontWeight: 700, color: "#22c55e" }}>{activeTasks.filter(t => t.status === "completed").length}</div>
-                  <div style={{ fontSize: "0.75rem", opacity: 0.5 }}>Success Rate: 95%</div>
+                <div className={`p-4 rounded-lg border ${borderClass} ${cardBgClass}`}>
+                  <div className="text-sm opacity-70 mb-2">Completed</div>
+                  <div className="text-2xl font-bold text-green-500">0</div>
+                  <div className="text-xs opacity-50">Success Rate: 95%</div>
                 </div>
-                <div style={cardStyle}>
-                  <div style={{ fontSize: "0.875rem", opacity: 0.7, marginBottom: "0.5rem" }}>Skills</div>
-                  <div style={{ fontSize: "2rem", fontWeight: 700 }}>45</div>
-                  <div style={{ fontSize: "0.75rem", opacity: 0.5 }}>Ready to use</div>
+                <div className={`p-4 rounded-lg border ${borderClass} ${cardBgClass}`}>
+                  <div className="text-sm opacity-70 mb-2">Skills</div>
+                  <div className="text-2xl font-bold">45</div>
+                  <div className="text-xs opacity-50">Ready to use</div>
                 </div>
-                <div style={cardStyle}>
-                  <div style={{ fontSize: "0.875rem", opacity: 0.7, marginBottom: "0.5rem" }}>Kilo CLI</div>
-                  <div style={{ fontSize: "2rem", fontWeight: 700 }}>v7.1.9</div>
-                  <div style={{ fontSize: "0.75rem", opacity: 0.5 }}>Local AI</div>
+                <div className={`p-4 rounded-lg border ${borderClass} ${cardBgClass}`}>
+                  <div className="text-sm opacity-70 mb-2">Kilo CLI</div>
+                  <div className="text-2xl font-bold">v7.1.9</div>
+                  <div className="text-xs opacity-50">Local AI</div>
                 </div>
               </div>
 
               {/* Quick Launch */}
-              <div style={{ marginTop: "2rem" }}>
-                <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "1rem" }}>⚡ Quick Launch - Top 10</h2>
-                <div style={gridStyle}>
+              <div className="mb-8">
+                <h2 className="text-xl font-semibold mb-4">⚡ Quick Launch - Top 10</h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                   {topSkills.map((skill) => (
-                    <div 
+                    <div
                       key={skill.id}
-                      style={{ ...cardStyle, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "0.75rem" }}
+                      onClick={() => executeSkill(skill.id, skill.name)}
+                      className={`p-4 rounded-lg border ${borderClass} ${cardBgClass} flex flex-col items-center text-center gap-3 cursor-pointer hover:shadow-lg transition-shadow ${
+                        isExecuting ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                     >
-                      <div style={{ width: "48px", height: "48px", borderRadius: "0.5rem", backgroundColor: skill.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.5rem" }}>
+                      <div className={`w-12 h-12 rounded-lg ${skill.color} flex items-center justify-center text-2xl`}>
                         {skill.icon}
                       </div>
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: "0.875rem" }}>{skill.name}</div>
-                        <div style={{ fontSize: "0.75rem", opacity: 0.7 }}>{skill.desc}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Active Tasks */}
-              <div style={{ marginTop: "2rem" }}>
-                <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "1rem" }}>📋 Active Tasks</h2>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                  {activeTasks.map((task) => (
-                    <div key={task.id} style={{ ...cardStyle, display: "flex", alignItems: "center", gap: "1rem" }}>
-                      <div style={{ fontSize: "1.25rem" }}>{getStatusIcon(task.status)}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 500 }}>{task.skill}</div>
-                        <div style={{ fontSize: "0.875rem", opacity: 0.7 }}>Processing...</div>
-                      </div>
-                      <div style={{ width: "150px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "0.25rem" }}>
-                          <span>{task.progress}%</span>
-                          <span style={getStatusColor(task.status)}>{task.status}</span>
-                        </div>
-                        <div style={{ width: "100%", height: "6px", borderRadius: "3px", backgroundColor: isDarkMode ? "#262626" : "#e5e5e5", overflow: "hidden" }}>
-                          <div style={{ width: `${task.progress}%`, height: "100%", borderRadius: "3px", backgroundColor: task.status === "completed" ? "#22c55e" : "#3b82f6" }}></div>
-                        </div>
+                        <div className="font-semibold text-sm">{skill.name}</div>
+                        <div className="text-xs opacity-70">{skill.desc}</div>
                       </div>
                     </div>
                   ))}
@@ -382,108 +290,44 @@ export default function Dashboard() {
         )}
 
         {activeTab === "chat" && (
-          <div style={chatContainerStyle}>
-            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
-              {chatMessages.map((msg, idx) => (
-                <div key={idx} style={chatMessageStyle(msg.role)}>
-                  <div style={{ fontSize: "0.875rem", lineHeight: 1.5 }}>{msg.content}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                placeholder="Piši šta želiš da uradim..."
-                style={{ 
-                  flex: 1, 
-                  padding: "0.75rem 1rem", 
-                  borderRadius: "0.375rem", 
-                  border: `1px solid ${isDarkMode ? "#262626" : "#e5e5e5"}`,
-                  backgroundColor: isDarkMode ? "#171717" : "#ffffff",
-                  color: "inherit",
-                  fontSize: "0.875rem"
-                }}
-              />
-              <button onClick={handleSendMessage} style={buttonStyle}>
-                Send
-              </button>
-            </div>
-          </div>
-        )}
-
-        {activeTab === "settings" && (
-          <div style={{ maxWidth: "600px" }}>
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "1rem" }}>⚙️ Settings</h2>
-            
-            <div style={{ ...cardStyle, marginBottom: "1rem" }}>
-              <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "1rem" }}>🔑 API Keys</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                {[
-                  { name: "Groq API", status: "configured" },
-                  { name: "Vercel Token", status: "configured" },
-                  { name: "Pexels API", status: "configured" },
-                  { name: "ElevenLabs", status: "not-configured" },
-                  { name: "V0 API Key", status: "not-configured" },
-                ].map((key, idx) => (
-                  <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem", borderRadius: "0.25rem", backgroundColor: isDarkMode ? "#111111" : "#f5f5f5" }}>
-                    <span>{key.name}</span>
-                    <span style={{ 
-                      padding: "0.25rem 0.75rem", 
-                      borderRadius: "0.25rem", 
-                      fontSize: "0.75rem", 
-                      fontWeight: 600,
-                      backgroundColor: key.status === "configured" ? "#22c55e" : "#eab308",
-                      color: "white"
-                    }}>
-                      {key.status === "configured" ? "✓ Configured" : "Not Configured"}
-                    </span>
+          <div className="max-w-4xl mx-auto">
+            <div className={`rounded-lg border ${borderClass} overflow-hidden`}>
+              <div className={`h-96 overflow-y-auto p-4 space-y-4 ${cardBgClass}`}>
+                {chatMessages.map((msg, idx) => (
+                  <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-[80%] rounded-lg p-3 ${
+                        msg.role === "user"
+                          ? "bg-blue-500 text-white"
+                          : isDarkMode
+                          ? "bg-gray-800"
+                          : "bg-gray-200"
+                      }`}
+                    >
+                      <p className="text-sm">{msg.content}</p>
+                    </div>
                   </div>
                 ))}
               </div>
-            </div>
-
-            <div style={{ ...cardStyle, marginBottom: "1rem" }}>
-              <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "1rem" }}>🖥️ System Status</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>Kilo CLI</span>
-                  <span style={{ color: "#22c55e" }}>✅ v7.1.9</span>
+              <div className={`p-4 border-t ${borderClass}`}>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                    placeholder="Piši šta želiš da uradim..."
+                    className={`flex-1 px-4 py-2 rounded-md border ${borderClass} ${
+                      isDarkMode ? "bg-gray-800" : "bg-white"
+                    } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    className="px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-medium transition-colors"
+                  >
+                    Send
+                  </button>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>Ollama</span>
-                  <span style={{ color: "#eab308" }}>⚠️ Not Installed</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>GitHub Repo</span>
-                  <span style={{ color: "#eab308" }}>⚠️ Not Linked</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>OpenClaw Source</span>
-                  <span style={{ color: "#22c55e" }}>✅ /workspace/openclaw-source</span>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ ...cardStyle, marginBottom: "1rem" }}>
-              <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "1rem" }}>🎨 Appearance</h3>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span>Dark Mode</span>
-                <button 
-                  onClick={() => setIsDarkMode(!isDarkMode)}
-                  style={{ 
-                    padding: "0.5rem 1rem", 
-                    borderRadius: "0.375rem", 
-                    backgroundColor: isDarkMode ? "#f59e0b" : "#1f2937",
-                    color: "white",
-                    border: "none",
-                    cursor: "pointer"
-                  }}
-                >
-                  {isDarkMode ? "ON" : "OFF"}
-                </button>
               </div>
             </div>
           </div>
@@ -491,16 +335,18 @@ export default function Dashboard() {
 
         {activeTab === "skills" && (
           <div>
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "1rem" }}>🧠 All 45 Skills</h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+            <h2 className="text-xl font-semibold mb-6">🧠 All 45 Skills</h2>
+            <div className="space-y-8">
               {skillCategories.map((category) => (
                 <div key={category.name}>
-                  <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "1rem" }}>{category.name}</h3>
-                  <div style={gridStyle}>
+                  <h3 className="text-lg font-semibold mb-3">{category.name}</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                     {category.skills.map((skill) => (
-                      <div key={skill} style={{ ...cardStyle, display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                        <span style={{ fontSize: "1.25rem" }}>•</span>
-                        <span style={{ fontSize: "0.875rem" }}>{skill}</span>
+                      <div
+                        key={skill}
+                        className={`p-3 rounded-lg border ${borderClass} ${cardBgClass} text-sm cursor-pointer hover:shadow-md transition-shadow`}
+                      >
+                        {skill}
                       </div>
                     ))}
                   </div>
@@ -510,32 +356,83 @@ export default function Dashboard() {
           </div>
         )}
 
-        {activeTab === "tasks" && (
-          <div>
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "1rem" }}>📋 Task Queue</h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              {activeTasks.map((task) => (
-                <div key={task.id} style={cardStyle}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-                    <span style={{ fontWeight: 600 }}>{task.skill}</span>
-                    <span style={getStatusColor(task.status)}>{task.status}</span>
+        {activeTab === "settings" && (
+          <div className="max-w-2xl">
+            <h2 className="text-xl font-semibold mb-6">⚙️ Settings</h2>
+
+            <div className={`rounded-lg border ${borderClass} ${cardBgClass} p-6 mb-6`}>
+              <h3 className="font-semibold mb-4">🔑 API Keys</h3>
+              <div className="space-y-3">
+                {[
+                  { name: "Groq API", status: "configured" },
+                  { name: "Vercel Token", status: "configured" },
+                  { name: "Pexels API", status: "configured" },
+                  { name: "ElevenLabs", status: "not-configured" },
+                  { name: "V0 API Key", status: "not-configured" },
+                ].map((key, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex items-center justify-between p-3 rounded-md ${
+                      isDarkMode ? "bg-gray-800" : "bg-gray-100"
+                    }`}
+                  >
+                    <span>{key.name}</span>
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-semibold ${
+                        key.status === "configured"
+                          ? "bg-green-500 text-white"
+                          : "bg-yellow-500 text-white"
+                      }`}
+                    >
+                      {key.status === "configured" ? "✓ Configured" : "Not Configured"}
+                    </span>
                   </div>
-                  <div style={{ width: "100%", height: "8px", borderRadius: "4px", backgroundColor: isDarkMode ? "#262626" : "#e5e5e5" }}>
-                    <div style={{ width: `${task.progress}%`, height: "100%", borderRadius: "4px", backgroundColor: task.status === "completed" ? "#22c55e" : "#3b82f6" }}></div>
+                ))}
+              </div>
+            </div>
+
+            <div className={`rounded-lg border ${borderClass} ${cardBgClass} p-6 mb-6`}>
+              <h3 className="font-semibold mb-4">🖥️ System Status</h3>
+              <div className="space-y-3">
+                {[
+                  { name: "Kilo CLI", status: "✅ v7.1.9" },
+                  { name: "Ollama", status: "⚠️ Not Installed" },
+                  { name: "GitHub Repo", status: "✅ Linked" },
+                  { name: "OpenClaw Source", status: "✅ /workspace/openclaw-source" },
+                ].map((item, idx) => (
+                  <div key={idx} className="flex justify-between">
+                    <span>{item.name}</span>
+                    <span>{item.status}</span>
                   </div>
-                  <div style={{ fontSize: "0.75rem", opacity: 0.7, marginTop: "0.5rem" }}>{task.progress}% complete</div>
-                </div>
-              ))}
+                ))}
+              </div>
+            </div>
+
+            <div className={`rounded-lg border ${borderClass} ${cardBgClass} p-6`}>
+              <h3 className="font-semibold mb-4">🎨 Appearance</h3>
+              <div className="flex justify-between items-center">
+                <span>Dark Mode</span>
+                <button
+                  onClick={() => setIsDarkMode(!isDarkMode)}
+                  className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                    isDarkMode ? "bg-yellow-500" : "bg-gray-700"
+                  } text-white`}
+                >
+                  {isDarkMode ? "ON" : "OFF"}
+                </button>
+              </div>
             </div>
           </div>
         )}
 
-        {(activeTab === "files" || activeTab === "settings") && activeTab !== "settings" && (
-          <div style={{ ...cardStyle, textAlign: "center", padding: "4rem 2rem" }}>
-            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>📁</div>
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.5rem" }}>File Manager</h3>
-            <p style={{ opacity: 0.7, marginBottom: "1rem" }}>Drag & drop files to upload</p>
-            <button style={{ ...buttonStyle, padding: "0.75rem 1.5rem" }}>Select Files</button>
+        {(activeTab === "tasks" || activeTab === "files") && (
+          <div className={`rounded-lg border ${borderClass} ${cardBgClass} p-12 text-center`}>
+            <div className="text-6xl mb-4">📁</div>
+            <h3 className="text-xl font-semibold mb-2">Coming Soon</h3>
+            <p className="opacity-70 mb-4">This feature is under development</p>
+            <button className="px-6 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-medium transition-colors">
+              Select Files
+            </button>
           </div>
         )}
       </div>
