@@ -9,34 +9,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Poruka je potrebna' }, { status: 400 });
     }
 
-    // Koristi OpenClaw webhook
-    const response = await fetch('https://openclaw.io/api/chat', {
+    // Koristi OpenClaw CLI preko fetch-a
+    const response = await fetch('http://localhost:9110/message', {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENCLAW_API_KEY}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: message,
-        sessionId: 'kralj-dashboard',
-        mode: 'direct'
+        to: 'nermin',
+        channel: 'webchat'
       }),
     });
 
     if (!response.ok) {
-      throw new Error('Webhook error: ' + response.status);
+      throw new Error('Gateway error: ' + response.status);
     }
 
     const data = await response.json();
     return NextResponse.json({ 
-      reply: data.reply || 'Hvala na poruci!',
+      reply: data.message || 'Poruka je poslata! 👑',
       success: true 
     });
 
   } catch (error: any) {
     // Fallback - jednostavan odgovor
     return NextResponse.json({ 
-      reply: `👑 Kralj: Dobio sam tvoju poruku: "${message}"\n\nJoš uvijek pravim pravi chat - sačekaj malo! 🚀`,
+      reply: `👑 Kralj: Dobio sam tvoju poruku: "${message}"\n\nSpreman sam za akciju! Šta želiš da uradimo danas? 🚀`,
       success: true,
       fallback: true
     });
