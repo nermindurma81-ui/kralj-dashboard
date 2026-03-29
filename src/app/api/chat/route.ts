@@ -9,33 +9,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Poruka je potrebna' }, { status: 400 });
     }
 
-    // Koristi OpenClaw CLI preko fetch-a
-    const response = await fetch('http://localhost:9110/message', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: message,
-        to: 'nermin',
-        channel: 'webchat'
-      }),
-    });
+    // Koristi OpenClaw sessions_spawn za pravi AI odgovor
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
 
-    if (!response.ok) {
-      throw new Error('Gateway error: ' + response.status);
-    }
+    const escapedMessage = message.replace(/"/g, '\\"').replace(/\n/g, '\\n');
+    
+    const result = await execAsync(
+      `openclaw sessions spawn --task "${escapedMessage}" --mode run --runtime subagent --timeoutSeconds 120`,
+      { 
+        cwd: '/mnt/data/openclaw/workspace/.openclaw/workspace',
+        timeout: 125000,
+        env: { ...process.env, HOME: '/root' }
+      }
+    );
 
-    const data = await response.json();
+    // Parsiraj output
+    const output = result.stdout || '';
+    const reply = output.trim() || 'Poruka je obrađena! 👑';
+
     return NextResponse.json({ 
-      reply: data.message || 'Poruka je poslata! 👑',
+      reply: reply,
       success: true 
     });
 
   } catch (error: any) {
-    // Fallback - jednostavan odgovor
+    // Pravi error response
     return NextResponse.json({ 
-      reply: `👑 Kralj: Dobio sam tvoju poruku: "${message}"\n\nSpreman sam za akciju! Šta želiš da uradimo danas? 🚀`,
-      success: true,
-      fallback: true
-    });
+      error: 'Greška: ' + (error.message || 'Nije uspelo'),
+      success: false 
+    }, { status: 500 });
   }
 }

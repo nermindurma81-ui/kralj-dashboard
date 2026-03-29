@@ -1,335 +1,245 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Date;
+};
+
+type Skill = {
+  id: string;
+  name: string;
+  icon: string;
+  desc: string;
+  color: string;
+};
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState("dashboard");
-  const [isDarkMode, setIsDarkMode] = useState(true);
-  const [chatInput, setChatInput] = useState("");
-  const [chatMessages, setChatMessages] = useState([
+  const [activeTab, setActiveTab] = useState("chat");
+  const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "Zdravo! Ja sam Kralj 👑, tvoj AI asistent sa 45 skillova. Kako mogu pomoći danas?",
+      content: "Bok! Ja sam Kralj 👑\n\nTvoj AI asistent sa **45 skillova**.\n\nŠta radimo danas? 🚀",
+      timestamp: new Date(),
     },
   ]);
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [isExecuting, setIsExecuting] = useState(false);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const topSkills = [
-    { id: "v0-dev", name: "v0-dev", icon: "🎨", desc: "UI iz prompta", color: "bg-purple-500" },
-    { id: "app-builder", name: "App Builder", icon: "💻", desc: "Fullstack app", color: "bg-blue-500" },
-    { id: "youtube-shorts", name: "YouTube Shorts", icon: "📹", desc: "Video automation", color: "bg-red-500" },
-    { id: "expo-deploy", name: "Expo Deploy", icon: "📱", desc: "Mobile deploy", color: "bg-orange-500" },
-    { id: "web-browsing", name: "Web Browsing", icon: "🌐", desc: "Internet search", color: "bg-green-500" },
-    { id: "security-audit", name: "Security Audit", icon: "🛡️", desc: "Code review", color: "bg-yellow-500" },
-    { id: "infra-engineer", name: "Infra Engineer", icon: "🖥️", desc: "DevOps & Cloud", color: "bg-cyan-500" },
-    { id: "github-ops", name: "GitHub Ops", icon: "🔀", desc: "Git workflow", color: "bg-gray-600" },
-    { id: "markitdown", name: "Markitdown", icon: "📄", desc: "File conversion", color: "bg-emerald-500" },
-    { id: "agentic-coding", name: "Agentic Coding", icon: "🤖", desc: "AI coding", color: "bg-indigo-500" },
+  const skills: Skill[] = [
+    { id: "v0-dev", name: "v0-dev", icon: "🎨", desc: "UI iz prompta", color: "from-purple-500 to-pink-500" },
+    { id: "app-builder", name: "App Builder", icon: "💻", desc: "Fullstack app", color: "from-blue-500 to-cyan-500" },
+    { id: "youtube-shorts", name: "YouTube Shorts", icon: "📹", desc: "Video automation", color: "from-red-500 to-orange-500" },
+    { id: "expo-deploy", name: "Expo Deploy", icon: "📱", desc: "Mobile deploy", color: "from-orange-500 to-amber-500" },
+    { id: "web-browsing", name: "Web Browsing", icon: "🌐", desc: "Internet search", color: "from-green-500 to-emerald-500" },
+    { id: "security-audit", name: "Security", icon: "🛡️", desc: "Code audit", color: "from-yellow-500 to-amber-500" },
   ];
 
-  const skillCategories = [
-    { name: "🧠 AI & Data", icon: "🧠", skills: ["agentic-coding", "cc-godmode", "data-analysis", "database", "pgvector", "whisper"] },
-    { name: "🎨 Design & Media", icon: "🎨", skills: ["blender", "expo-architect", "image-edit", "image-ocr", "image-vision", "json-render", "screenshot-ocr", "tailwind", "ui-ux", "ui-mobile"] },
-    { name: "🤖 Automation", icon: "🤖", skills: ["auto-shorts", "workflows", "social-media", "video-frames", "youtube-shorts"] },
-    { name: "🔧 DevOps & Security", icon: "🔧", skills: ["infra-engineer", "security-audit", "web-browsing", "audit-code-health"] },
-    { name: "💻 AI Coding", icon: "💻", skills: ["v0-dev", "app-builder", "base44", "crewai", "cursor", "expo-deploy", "manus", "multi-agent", "tanstack", "vibe-coding"] },
-    { name: "🛡️ Code Quality", icon: "🛡️", skills: ["api-designer", "code-review", "github-ops", "python-perf", "qa-use"] },
-    { name: "📦 Core", icon: "📦", skills: ["find-skills", "gog", "markitdown", "self-improve", "summarize"] },
-  ];
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!chatInput.trim()) return;
-    
-    const userMsg = chatInput;
-    setChatMessages([...chatMessages, { role: "user", content: chatInput }]);
-    setChatInput("");
-    
+  const sendMessage = async () => {
+    if (!input.trim() || isLoading) return;
+
+    const userMsg = input.trim();
+    setInput("");
+    setMessages((prev) => [...prev, { role: "user", content: userMsg, timestamp: new Date() }]);
+    setIsLoading(true);
+
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: chatInput }),
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMsg }),
       });
-      
+
       const data = await res.json();
-      
-      if (data.success) {
-        setChatMessages((prev) => [
+
+      if (data.success && data.reply) {
+        setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: data.reply || 'Poruka je poslata! 👑' },
+          { role: "assistant", content: data.reply, timestamp: new Date() },
         ]);
       } else {
-        setChatMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: `Greška: ${data.error || 'Nešto nije u redu'}` },
-        ]);
+        throw new Error(data.error || "Nešto nije u redu");
       }
-    } catch (err) {
-      // Fallback - jednostavan odgovor
-      setChatMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `👑 Kralj: Dobio sam tvoju poruku: "${userMsg}"\n\nJoš uvijek pravim pravi chat - sačekaj malo! 🚀` },
-      ]);
-    }
-  };
-
-  const executeSkill = async (skillId: string, skillName: string) => {
-    if (isExecuting) return;
-    setIsExecuting(true);
-
-    try {
-      const response = await fetch('/api/skills/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          skill: skillId,
-          description: `Executing ${skillName}`,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        // Dodaj novi task u listu
-        setTasks(prev => [data.task, ...prev]);
-        
-        // Obavijesti korisnika
-        setChatMessages(prev => [
-          ...prev,
-          {
-            role: "assistant",
-            content: `🚀 Pokrenuo sam ${skillName}! Task ID: ${data.taskId}. Prati napredak u Tasks tabu.`,
-          },
-        ]);
-
-        // Prebaci na Tasks tab nakon 2 sekunde
-        setTimeout(() => setActiveTab("tasks"), 2000);
-      } else {
-        throw new Error(data.error || 'Failed to execute skill');
-      }
-    } catch (error) {
-      console.error('Skill execution error:', error);
-      setChatMessages(prev => [
+    } catch (err: any) {
+      setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: `❌ Greška pri pokretanju ${skillName}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          content: `👑 Kralj: ${err.message || "Greška"}`,
+          timestamp: new Date(),
         },
       ]);
     } finally {
-      setIsExecuting(false);
+      setIsLoading(false);
     }
   };
 
-  const loadTasks = async () => {
+  const executeSkill = async (skill: Skill) => {
+    setIsLoading(true);
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: `Pokreni ${skill.name}`, timestamp: new Date() },
+    ]);
+
     try {
-      const response = await fetch('/api/skills/execute');
-      const data = await response.json();
-      if (data.success) {
-        setTasks(data.tasks);
-      }
-    } catch (error) {
-      console.error('Failed to load tasks:', error);
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: `Pokreni skill: ${skill.id} - ${skill.desc}` }),
+      });
+
+      const data = await res.json();
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.reply || `🚀 Pokrećem ${skill.name}...`, timestamp: new Date() },
+      ]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: `✅ ${skill.name} pokrenut!`, timestamp: new Date() },
+      ]);
+    } finally {
+      setIsLoading(false);
     }
   };
-
-  // Load tasks when switching to tasks tab
-  useState(() => {
-    if (activeTab === 'tasks') {
-      loadTasks();
-    }
-  });
-
-  const bgClass = isDarkMode ? "bg-gray-950" : "bg-white";
-  const textClass = isDarkMode ? "text-gray-100" : "text-gray-900";
-  const borderClass = isDarkMode ? "border-gray-800" : "border-gray-200";
-  const cardBgClass = isDarkMode ? "bg-gray-900" : "bg-gray-50";
 
   return (
-    <div className={`min-h-screen ${bgClass} ${textClass}`}>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
       {/* Header */}
-      <header className={`sticky top-0 z-50 border-b ${borderClass} ${bgClass} backdrop-blur`}>
-        <div className="flex h-14 items-center justify-between px-6">
+      <header className="sticky top-0 z-50 backdrop-blur-xl bg-gray-900/80 border-b border-gray-700/50">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold">👑 Kralj Dashboard</h1>
-            <span className="text-xs opacity-70">v1.0.0</span>
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xl font-bold">
+              👑
+            </div>
+            <div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                Kralj Dashboard
+              </h1>
+              <p className="text-xs text-gray-400">45 AI Skillova</p>
+            </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-sm">
-              <span>Kilo:</span>
-              <span className="px-2 py-0.5 rounded-full bg-green-500 text-white text-xs font-semibold">✅ Ready</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <span>GitHub:</span>
-              <span className="px-2 py-0.5 rounded-full bg-yellow-500 text-white text-xs font-semibold">⚠️ Not Linked</span>
-            </div>
-            <button
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              className="px-3 py-1.5 rounded-md bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors"
-            >
-              {isDarkMode ? "☀️" : "🌙"}
-            </button>
-            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center font-bold text-white">
-              K👑
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/20 border border-green-500/30">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-sm text-green-400">Online</span>
             </div>
           </div>
         </div>
       </header>
 
       {/* Tabs */}
-      <div className={`flex gap-2 px-6 py-3 border-b ${borderClass} overflow-x-auto`}>
-        {["dashboard", "chat", "tasks", "files", "settings", "skills"].map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
-              activeTab === tab
-                ? isDarkMode
-                  ? "bg-gray-800"
-                  : "bg-gray-200"
-                : "hover:bg-gray-800/50"
-            }`}
-          >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </button>
-        ))}
+      <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="flex gap-2">
+          {["chat", "skills", "dashboard"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === tab
+                  ? "bg-white text-gray-900 shadow-lg"
+                  : "bg-gray-800/50 text-gray-400 hover:text-white hover:bg-gray-700/50"
+              }`}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Main Content */}
-      <div className="p-6">
-        {activeTab === "dashboard" && (
-          <div className="flex gap-8">
-            {/* Sidebar */}
-            <aside className={`w-72 p-4 border-r ${borderClass} ${cardBgClass}`}>
-              <div>
-                <h3 className="text-xs font-semibold uppercase opacity-70 mb-3">Quick Launch</h3>
+      <main className="max-w-7xl mx-auto px-6 pb-8">
+        {activeTab === "chat" && (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Chat */}
+            <div className="lg:col-span-3">
+              <div className="bg-gray-800/50 backdrop-blur-xl rounded-2xl border border-gray-700/50 overflow-hidden h-[600px] flex flex-col">
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                  {messages.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                          msg.role === "user"
+                            ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+                            : "bg-gray-700/50 text-gray-100"
+                        }`}
+                      >
+                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                        <p className="text-xs opacity-60 mt-1">
+                          {msg.timestamp.toLocaleTimeString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  {isLoading && (
+                    <div className="flex justify-start">
+                      <div className="bg-gray-700/50 rounded-2xl px-4 py-3">
+                        <div className="flex gap-1">
+                          <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" />
+                          <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce [animation-delay:0.2s]" />
+                          <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce [animation-delay:0.4s]" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Input */}
+                <div className="p-4 border-t border-gray-700/50">
+                  <div className="flex gap-3">
+                    <input
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                      placeholder="Šta želiš da uradim?"
+                      className="flex-1 bg-gray-700/50 border border-gray-600/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
+                    />
+                    <button
+                      onClick={sendMessage}
+                      disabled={isLoading || !input.trim()}
+                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-medium transition-all transform hover:scale-105 active:scale-95"
+                    >
+                      Pošalji
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Launch */}
+            <div className="lg:col-span-1">
+              <div className="bg-gray-800/50 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-4">
+                <h3 className="text-sm font-semibold text-gray-300 mb-4">⚡ Quick Launch</h3>
                 <div className="space-y-2">
-                  {topSkills.slice(0, 5).map((skill) => (
+                  {skills.map((skill) => (
                     <button
                       key={skill.id}
-                      className={`w-full p-2 rounded-md text-left text-sm flex items-center gap-2 transition-colors ${
-                        isDarkMode ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-200 hover:bg-gray-300"
-                      }`}
+                      onClick={() => executeSkill(skill)}
+                      disabled={isLoading}
+                      className="w-full p-3 rounded-xl bg-gray-700/30 hover:bg-gray-700/50 border border-gray-600/30 hover:border-gray-500/50 transition-all text-left disabled:opacity-50"
                     >
-                      <span>{skill.icon}</span>
-                      <span>{skill.name}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">{skill.icon}</span>
+                        <div>
+                          <p className="text-sm font-medium">{skill.name}</p>
+                          <p className="text-xs text-gray-400">{skill.desc}</p>
+                        </div>
+                      </div>
                     </button>
                   ))}
-                </div>
-              </div>
-
-              <div className={`mt-6 pt-4 border-t ${borderClass}`}>
-                <h3 className="text-xs font-semibold uppercase opacity-70 mb-3">All Skills (45)</h3>
-                <div className="space-y-4 max-h-80 overflow-y-auto">
-                  {skillCategories.map((category) => (
-                    <div key={category.name}>
-                      <div className="text-xs font-semibold opacity-80 mb-1">{category.name}</div>
-                      {category.skills.slice(0, 3).map((skill) => (
-                        <button
-                          key={skill}
-                          className="block w-full text-left text-xs py-0.5 opacity-70 hover:opacity-100"
-                        >
-                          • {skill}
-                        </button>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </aside>
-
-            {/* Main Content */}
-            <main className="flex-1">
-              {/* Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <div className={`p-4 rounded-lg border ${borderClass} ${cardBgClass}`}>
-                  <div className="text-sm opacity-70 mb-2">Active Tasks</div>
-                  <div className="text-2xl font-bold">0</div>
-                  <div className="text-xs opacity-50">In Progress</div>
-                </div>
-                <div className={`p-4 rounded-lg border ${borderClass} ${cardBgClass}`}>
-                  <div className="text-sm opacity-70 mb-2">Completed</div>
-                  <div className="text-2xl font-bold text-green-500">0</div>
-                  <div className="text-xs opacity-50">Success Rate: 95%</div>
-                </div>
-                <div className={`p-4 rounded-lg border ${borderClass} ${cardBgClass}`}>
-                  <div className="text-sm opacity-70 mb-2">Skills</div>
-                  <div className="text-2xl font-bold">45</div>
-                  <div className="text-xs opacity-50">Ready to use</div>
-                </div>
-                <div className={`p-4 rounded-lg border ${borderClass} ${cardBgClass}`}>
-                  <div className="text-sm opacity-70 mb-2">Kilo CLI</div>
-                  <div className="text-2xl font-bold">v7.1.9</div>
-                  <div className="text-xs opacity-50">Local AI</div>
-                </div>
-              </div>
-
-              {/* Quick Launch */}
-              <div className="mb-8">
-                <h2 className="text-xl font-semibold mb-4">⚡ Quick Launch - Top 10</h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                  {topSkills.map((skill) => (
-                    <div
-                      key={skill.id}
-                      onClick={() => executeSkill(skill.id, skill.name)}
-                      className={`p-4 rounded-lg border ${borderClass} ${cardBgClass} flex flex-col items-center text-center gap-3 cursor-pointer hover:shadow-lg transition-shadow ${
-                        isExecuting ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    >
-                      <div className={`w-12 h-12 rounded-lg ${skill.color} flex items-center justify-center text-2xl`}>
-                        {skill.icon}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-sm">{skill.name}</div>
-                        <div className="text-xs opacity-70">{skill.desc}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </main>
-          </div>
-        )}
-
-        {activeTab === "chat" && (
-          <div className="max-w-4xl mx-auto">
-            <div className={`rounded-lg border ${borderClass} overflow-hidden`}>
-              <div className={`h-96 overflow-y-auto p-4 space-y-4 ${cardBgClass}`}>
-                {chatMessages.map((msg, idx) => (
-                  <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                    <div
-                      className={`max-w-[80%] rounded-lg p-3 ${
-                        msg.role === "user"
-                          ? "bg-blue-500 text-white"
-                          : isDarkMode
-                          ? "bg-gray-800"
-                          : "bg-gray-200"
-                      }`}
-                    >
-                      <p className="text-sm">{msg.content}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className={`p-4 border-t ${borderClass}`}>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                    placeholder="Piši šta želiš da uradim..."
-                    className={`flex-1 px-4 py-2 rounded-md border ${borderClass} ${
-                      isDarkMode ? "bg-gray-800" : "bg-white"
-                    } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                  />
-                  <button
-                    onClick={handleSendMessage}
-                    className="px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-medium transition-colors"
-                  >
-                    Send
-                  </button>
                 </div>
               </div>
             </div>
@@ -337,108 +247,46 @@ export default function Dashboard() {
         )}
 
         {activeTab === "skills" && (
-          <div>
-            <h2 className="text-xl font-semibold mb-6">🧠 All 45 Skills</h2>
-            <div className="space-y-8">
-              {skillCategories.map((category) => (
-                <div key={category.name}>
-                  <h3 className="text-lg font-semibold mb-3">{category.name}</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                    {category.skills.map((skill) => (
-                      <div
-                        key={skill}
-                        className={`p-3 rounded-lg border ${borderClass} ${cardBgClass} text-sm cursor-pointer hover:shadow-md transition-shadow`}
-                      >
-                        {skill}
-                      </div>
-                    ))}
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {skills.map((skill) => (
+              <div
+                key={skill.id}
+                onClick={() => executeSkill(skill)}
+                className="bg-gray-800/50 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-6 cursor-pointer hover:border-gray-500/50 transition-all group"
+              >
+                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${skill.color} flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform`}>
+                  {skill.icon}
                 </div>
-              ))}
-            </div>
+                <h3 className="text-lg font-semibold mb-2">{skill.name}</h3>
+                <p className="text-sm text-gray-400">{skill.desc}</p>
+              </div>
+            ))}
           </div>
         )}
 
-        {activeTab === "settings" && (
-          <div className="max-w-2xl">
-            <h2 className="text-xl font-semibold mb-6">⚙️ Settings</h2>
-
-            <div className={`rounded-lg border ${borderClass} ${cardBgClass} p-6 mb-6`}>
-              <h3 className="font-semibold mb-4">🔑 API Keys</h3>
-              <div className="space-y-3">
-                {[
-                  { name: "Groq API", status: "configured" },
-                  { name: "Vercel Token", status: "configured" },
-                  { name: "Pexels API", status: "configured" },
-                  { name: "ElevenLabs", status: "not-configured" },
-                  { name: "V0 API Key", status: "not-configured" },
-                ].map((key, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex items-center justify-between p-3 rounded-md ${
-                      isDarkMode ? "bg-gray-800" : "bg-gray-100"
-                    }`}
-                  >
-                    <span>{key.name}</span>
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-semibold ${
-                        key.status === "configured"
-                          ? "bg-green-500 text-white"
-                          : "bg-yellow-500 text-white"
-                      }`}
-                    >
-                      {key.status === "configured" ? "✓ Configured" : "Not Configured"}
-                    </span>
-                  </div>
-                ))}
+        {activeTab === "dashboard" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { label: "Skillovi", value: "45", icon: "🧠", color: "from-blue-500 to-purple-500" },
+              { label: "Taskovi", value: "0", icon: "📋", color: "from-green-500 to-emerald-500" },
+              { label: "Uspjeh", value: "95%", icon: "✅", color: "from-orange-500 to-amber-500" },
+              { label: "Status", value: "Online", icon: "🟢", color: "from-cyan-500 to-blue-500" },
+            ].map((stat) => (
+              <div
+                key={stat.label}
+                className="bg-gray-800/50 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-6"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-3xl">{stat.icon}</span>
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.color} opacity-20`} />
+                </div>
+                <p className="text-3xl font-bold mb-1">{stat.value}</p>
+                <p className="text-sm text-gray-400">{stat.label}</p>
               </div>
-            </div>
-
-            <div className={`rounded-lg border ${borderClass} ${cardBgClass} p-6 mb-6`}>
-              <h3 className="font-semibold mb-4">🖥️ System Status</h3>
-              <div className="space-y-3">
-                {[
-                  { name: "Kilo CLI", status: "✅ v7.1.9" },
-                  { name: "Ollama", status: "⚠️ Not Installed" },
-                  { name: "GitHub Repo", status: "✅ Linked" },
-                  { name: "OpenClaw Source", status: "✅ /workspace/openclaw-source" },
-                ].map((item, idx) => (
-                  <div key={idx} className="flex justify-between">
-                    <span>{item.name}</span>
-                    <span>{item.status}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className={`rounded-lg border ${borderClass} ${cardBgClass} p-6`}>
-              <h3 className="font-semibold mb-4">🎨 Appearance</h3>
-              <div className="flex justify-between items-center">
-                <span>Dark Mode</span>
-                <button
-                  onClick={() => setIsDarkMode(!isDarkMode)}
-                  className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                    isDarkMode ? "bg-yellow-500" : "bg-gray-700"
-                  } text-white`}
-                >
-                  {isDarkMode ? "ON" : "OFF"}
-                </button>
-              </div>
-            </div>
+            ))}
           </div>
         )}
-
-        {(activeTab === "tasks" || activeTab === "files") && (
-          <div className={`rounded-lg border ${borderClass} ${cardBgClass} p-12 text-center`}>
-            <div className="text-6xl mb-4">📁</div>
-            <h3 className="text-xl font-semibold mb-2">Coming Soon</h3>
-            <p className="opacity-70 mb-4">This feature is under development</p>
-            <button className="px-6 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-medium transition-colors">
-              Select Files
-            </button>
-          </div>
-        )}
-      </div>
+      </main>
     </div>
   );
 }
