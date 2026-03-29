@@ -1,66 +1,44 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
-// OpenClaw Gateway API
-const OPENCLAW_GATEWAY = process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:8080';
-
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { message, conversationId } = body;
+    const { message } = body;
 
     if (!message) {
-      return NextResponse.json(
-        { error: 'Message is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Poruka je potrebna' }, { status: 400 });
     }
 
-    // Pozovi OpenClaw Gateway za chat poruku
-    const response = await fetch(`${OPENCLAW_GATEWAY}/message`, {
+    // Koristi OpenClaw webhook
+    const response = await fetch('https://openclaw.io/api/chat', {
       method: 'POST',
-      headers: {
+      headers: { 
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENCLAW_API_KEY}`
       },
       body: JSON.stringify({
-        action: 'send',
-        channel: 'webchat',
         message: message,
-        conversationId: conversationId || null,
+        sessionId: 'kralj-dashboard',
+        mode: 'direct'
       }),
     });
 
     if (!response.ok) {
-      // Fallback response ako gateway nije dostupan
-      return NextResponse.json({
-        success: true,
-        response: `Razumio sam: "${message}". Koristit ću odgovarajući skill! 👑\n\n(Napomena: OpenClaw Gateway nije dostupan na ${OPENCLAW_GATEWAY})`,
-        fallback: true,
-      });
+      throw new Error('Webhook error: ' + response.status);
     }
 
     const data = await response.json();
-
-    return NextResponse.json({
-      success: true,
-      response: data.message || data.content || 'Poruka poslana',
-      conversationId: data.conversationId || conversationId,
+    return NextResponse.json({ 
+      reply: data.reply || 'Hvala na poruci!',
+      success: true 
     });
-  } catch (error) {
-    console.error('Chat API Error:', error);
-    
-    // Fallback response za demo
-    return NextResponse.json({
+
+  } catch (error: any) {
+    // Fallback - jednostavan odgovor
+    return NextResponse.json({ 
+      reply: `👑 Kralj: Dobio sam tvoju poruku: "${message}"\n\nJoš uvijek pravim pravi chat - sačekaj malo! 🚀`,
       success: true,
-      response: `Razumio sam: "${request}". Koristit ću odgovarajući skill! 👑\n\n(Ovo je demo response - poveži OpenClaw Gateway za pravi AI)`,
-      fallback: true,
+      fallback: true
     });
   }
-}
-
-export async function GET() {
-  return NextResponse.json({
-    status: 'ok',
-    gateway: OPENCLAW_GATEWAY,
-    timestamp: new Date().toISOString(),
-  });
 }

@@ -38,37 +38,40 @@ export default function Dashboard() {
     { name: "📦 Core", icon: "📦", skills: ["find-skills", "gog", "markitdown", "self-improve", "summarize"] },
   ];
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!chatInput.trim()) return;
+    
+    const userMsg = chatInput;
     setChatMessages([...chatMessages, { role: "user", content: chatInput }]);
     setChatInput("");
     
-    // Pošalji na OpenClaw API
-    fetch('/api/openclaw', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: chatInput }),
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          setChatMessages((prev) => [
-            ...prev,
-            { role: "assistant", content: `Razumio sam: "${chatInput}". Koristit ću odgovarajući skill! 👑` },
-          ]);
-        } else {
-          setChatMessages((prev) => [
-            ...prev,
-            { role: "assistant", content: `Greška: ${data.error || 'Nešto nije u redu'}` },
-          ]);
-        }
-      })
-      .catch(() => {
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: chatInput }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
         setChatMessages((prev) => [
           ...prev,
-          { role: "assistant", content: `Razumio sam: "${chatInput}". (Offline mode) 👑` },
+          { role: "assistant", content: data.reply || 'Poruka je poslata! 👑' },
         ]);
-      });
+      } else {
+        setChatMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: `Greška: ${data.error || 'Nešto nije u redu'}` },
+        ]);
+      }
+    } catch (err) {
+      // Fallback - jednostavan odgovor
+      setChatMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: `👑 Kralj: Dobio sam tvoju poruku: "${userMsg}"\n\nJoš uvijek pravim pravi chat - sačekaj malo! 🚀` },
+      ]);
+    }
   };
 
   const executeSkill = async (skillId: string, skillName: string) => {
