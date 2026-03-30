@@ -34,9 +34,6 @@ export default function Dashboard() {
   // Botovi
   const bots: Bot[] = [
     { id: "1", name: "Kralj 👑", status: "online", sessions: 3, messages: 1247, uptime: "99.8%", model: "Gensee-397B" },
-    { id: "2", name: "ShortAI Bot", status: "busy", sessions: 12, messages: 8934, uptime: "99.5%", model: "Groq-Llama3" },
-    { id: "3", name: "Video Bot", status: "online", sessions: 5, messages: 2341, uptime: "98.9%", model: "FFmpeg+AI" },
-    { id: "4", name: "Deploy Bot", status: "offline", sessions: 0, messages: 456, uptime: "97.2%", model: "Vercel-API" },
   ];
 
   // Sesije
